@@ -1,0 +1,12 @@
+chroma_db/*
+!chroma_db/.gitkeep
+venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
