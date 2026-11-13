@@ -1,80 +1,71 @@
 
-from agent.rag_agent import RAGAgent
-from agent.llm_client import MODEL_NAME
 import ollama
+
+from agent.llm_client import MODEL_NAME
+from agent.rag_agent import RAGAgent
 
 
 class ResearchAgent:
-
     def __init__(self):
         self.rag_agent = RAGAgent()
         self.model = MODEL_NAME
 
-    def research(self, task: str) -> str:
-
+    def research(self, task: str, existing_code: str) -> str:
         if not task.strip():
-            raise ValueError("Research task cannot be empty.")
+            raise ValueError("Task cannot be empty.")
 
-        # Retrieve project knowledge through RAG
-        retrieved_context = self.rag_agent.ask(
+        if not existing_code.strip():
+            raise ValueError("Existing source code cannot be empty.")
+
+        rag_findings = self.rag_agent.ask(
             question=task,
             top_k=5
         )
 
-        prompt = f"""
-You are a Senior Software Engineering Research Agent.
+        system_prompt = """
+You are a senior software engineering research agent.
 
-Your responsibility is to investigate the given task
-using the retrieved project information.
+Your job is to investigate the requested task using the supplied source code
+and supplementary RAG findings.
 
-Rules:
-- Use only the retrieved information.
-- Identify relevant project components and files.
-- Explain the existing implementation.
-- Identify possible gaps or risks.
-- Do not invent implementation details.
-- Clearly mention when information is insufficient.
+STRICT RULES:
+1. The supplied existing source code is the primary source of truth.
+2. Never invent classes, functions, imports, variables, or APIs.
+3. Do not claim that a feature exists unless it appears in the source code.
+4. RAG findings are supplementary and may be outdated or inaccurate.
+5. If RAG findings conflict with the source code, trust the source code.
+6. Clearly distinguish existing implementation from recommendations.
+7. Identify missing information instead of guessing.
 
-RESEARCH TASK:
+Return your findings using these sections:
+
+1. Existing Implementation
+2. Current Error Handling
+3. Missing Validation
+4. Potential Risks
+5. Recommended Improvements
+6. Information That Cannot Be Verified
+"""
+
+        user_prompt = f"""
+TASK:
 {task}
 
-RETRIEVED PROJECT INFORMATION:
-{retrieved_context}
+AUTHORITATIVE EXISTING SOURCE CODE:
+{existing_code}
 
-Provide your research findings with these sections:
-1. Relevant Components
-2. Existing Implementation
-3. Potential Issues
-4. Recommendations
-5. Missing Information
+SUPPLEMENTARY RAG FINDINGS (NOT AUTHORITATIVE):
+{rag_findings}
+
+Analyze the task using the exact source code provided.
 """
 
         response = ollama.chat(
             model=self.model,
             messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
         )
 
-        return response["message"]["content"]
-
-
-if __name__ == "__main__":
-
-    researcher = ResearchAgent()
-
-    task = input(
-        "Enter a software engineering research task: "
-    ).strip()
-
-    try:
-        findings = researcher.research(task)
-
-        print("\nResearch Findings:\n")
-        print(findings)
-
-    except Exception as exc:
-        print(f"Research error: {exc}")
+        return response.message.content
